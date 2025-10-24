@@ -18,6 +18,16 @@ public interface IEmployeeService {
 
 	public List<LeaveRequest> viewLeaveHistory(Long empId);
 
-	public LeaveBalance viewLeaveBalance(Long empId); 
+	public LeaveBalance viewLeaveBalance(Long empId);
 
-}
+	public LeaveRequest updateLeave(Long empId, Long leaveId, LeaveRequest request);
+
+	public String cancelLeave(Long empId, Long leaveId);
+
+	public Employee checkUserDetails(UserRequestDto dto);
+
+	public Employee viewProfile(Long empId);
+
+	public Employee updateProfile(Long empId, Employee updated); 
+
+} 

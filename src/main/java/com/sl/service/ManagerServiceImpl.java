@@ -26,6 +26,9 @@ public class ManagerServiceImpl implements IManagerService{
 	@Autowired
 	private LeaveRequestRepository leaveRequestRepo;
 	
+    @Autowired
+    private EmailService emailService;
+	
 	@Override
 	public Manager saveManager(ManagerRequestDto managerRequestDto) {
 	    Manager manager = new Manager();
@@ -58,13 +61,30 @@ public class ManagerServiceImpl implements IManagerService{
         request.setStatus(LeaveStatus.APPROVED);
         leaveRequestRepo.save(request);
 
-        // ✅ Update leave balance here
+        // Update leave balance here
         LeaveBalance balance = leaveBalanceRepo.findByEmployeeEmpId(request.getEmployee().getEmpId());
         int requestedDays = (int) ChronoUnit.DAYS.between(request.getStartDate(), request.getEndDate()) + 1;
         balance.setUsedLeave(balance.getUsedLeave() + requestedDays);
         balance.setRemainingLeave(balance.getRemainingLeave() - requestedDays);
         leaveBalanceRepo.save(balance);
+        
+        
+        try {
+            String subject = "Leave Request Approved ";
+            String body = "Hello " + request.getEmployee().getName() + ",\n\n" +
+                    "Good news! Your leave request has been *approved* by your manager.\n\n" +
+                    "Leave Type: " + request.getLeaveType().getTypeName() + "\n" +
+                    "From: " + request.getStartDate() + " to " + request.getEndDate() + "\n" +
+                    "Total Days: " + requestedDays + "\n" +
+                    "Status: " + request.getStatus() + "\n\n" +
+                    "Enjoy your time off!\n\n" +
+                    "Best Regards,\nSmart Leave Management System";
 
+            emailService.sendEmail(request.getEmployee().getEmail(), subject, body);
+        } catch (Exception e) {
+            System.err.println("Failed to send approval email: " + e.getMessage());
+        }
+        
         return request; 
 	}
 
@@ -77,7 +97,27 @@ public class ManagerServiceImpl implements IManagerService{
         }
 
         request.setStatus(LeaveStatus.REJECTED); 
-        return leaveRequestRepo.save(request); 
+        leaveRequestRepo.save(request); 
+        
+        
+        try {
+            String subject = "Leave Request Rejected ";
+            String body = "Hello " + request.getEmployee().getName() + ",\n\n" +
+                    "Unfortunately, your leave request has been *rejected* by your manager.\n\n" +
+                    "Leave Type: " + request.getLeaveType().getTypeName() + "\n" +
+                    "From: " + request.getStartDate() + " to " + request.getEndDate() + "\n" +
+                    "Total Days: " + ((int) ChronoUnit.DAYS.between(request.getStartDate(), request.getEndDate()) + 1) + "\n" +
+                    "Status: " + request.getStatus() + "\n\n" +
+                    "You may contact your manager for clarification.\n\n" +
+                    "Best Regards,\nSmart Leave Management System";
+
+            emailService.sendEmail(request.getEmployee().getEmail(), subject, body);
+        } catch (Exception e) {
+            System.err.println("Failed to send rejection email: " + e.getMessage());
+        }
+        
+        
+        return request;
     }
 }
  
