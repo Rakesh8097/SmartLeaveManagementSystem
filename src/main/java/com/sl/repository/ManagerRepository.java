@@ -6,4 +6,6 @@ import com.sl.entity.Manager;
 
 public interface ManagerRepository extends JpaRepository<Manager, Long>{
 
-}
+	Manager findByEmail(String email);
+
+} 

@@ -1,15 +1,22 @@
 package com.sl.service;
 
 import java.time.temporal.ChronoUnit;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.sl.entity.Employee;
 import com.sl.entity.LeaveBalance;
 import com.sl.entity.LeaveRequest;
 import com.sl.entity.LeaveStatus;
 import com.sl.entity.Manager;
 import com.sl.model.ManagerRequestDto;
+import com.sl.repository.EmployeeRepository;
 import com.sl.repository.LeaveBalanceRepository;
 import com.sl.repository.LeaveRequestRepository;
 import com.sl.repository.ManagerRepository;
@@ -20,6 +27,9 @@ public class ManagerServiceImpl implements IManagerService{
 	@Autowired
 	private ManagerRepository managerRepo;
 	
+	@Autowired 
+	private EmployeeRepository employeeRepo;
+	
 	@Autowired
 	private LeaveBalanceRepository leaveBalanceRepo;
 	
@@ -29,6 +39,7 @@ public class ManagerServiceImpl implements IManagerService{
     @Autowired
     private EmailService emailService;
 	
+    // 1. Manger Register
 	@Override
 	public Manager saveManager(ManagerRequestDto managerRequestDto) {
 	    Manager manager = new Manager();
@@ -36,7 +47,7 @@ public class ManagerServiceImpl implements IManagerService{
 	    try {
 	    	manager.setName(managerRequestDto.getName());
 	    	manager.setEmail(managerRequestDto.getEmail());
-	    	manager.setPassword(managerRequestDto.getPassword());
+	    	manager.setPassword(Base64.getEncoder().encodeToString(managerRequestDto.getPassword().getBytes()));  
 	    	manager.setDepartment(managerRequestDto.getDepartment());
 
 	        // Save employee first
@@ -49,6 +60,21 @@ public class ManagerServiceImpl implements IManagerService{
 	    return manager;  
 	}
 
+	// 2. Manager Login
+	@Override
+	public Manager checkDetails(ManagerRequestDto managerDto) {
+		
+		Manager byEmail = managerRepo.findByEmail(managerDto.getEmail());
+		if(byEmail!=null)
+		{
+			String decode = new String(Base64.getDecoder().decode(byEmail.getPassword()));
+			if(decode.equals(managerDto.getPassword()))
+				return byEmail;
+		}
+		return byEmail;
+	}
+	
+	// 3. Approve Leave
 	@Override
 	public LeaveRequest  approveLeave(Long requestId) {
 		LeaveRequest request = leaveRequestRepo.findById(requestId)
@@ -88,6 +114,8 @@ public class ManagerServiceImpl implements IManagerService{
         return request; 
 	}
 
+	
+	//  4. Reject Leave
 	@Override
     public LeaveRequest rejectLeave(Long requestId) {
         LeaveRequest request = leaveRequestRepo.findById(requestId)
@@ -119,8 +147,78 @@ public class ManagerServiceImpl implements IManagerService{
         
         return request;
     }
+
+	// 5. Get Pending Leave
+	public List<LeaveRequest> getPendingLeavesByManager(Long managerId) {
+	    Manager manager = managerRepo.findById(managerId)
+	            .orElseThrow(() -> new RuntimeException("Manager not found"));
+
+	    List<Employee> teamMembers = employeeRepo.findByDepartment(manager.getDepartment());
+	    List<Long> empIds = teamMembers.stream()
+	            .map(Employee::getEmpId)
+	            .collect(Collectors.toList());
+
+	    return leaveRequestRepo.findByEmployee_EmpIdInAndStatus(empIds, LeaveStatus.PENDING); 
+	}
+
+
+	// 6. Get Leave History
+	public List<LeaveRequest> getLeaveHistoryOfTeam(Long managerId) {
+	    Manager manager = managerRepo.findById(managerId)
+	            .orElseThrow(() -> new RuntimeException("Manager not found"));
+
+	    List<Employee> team = employeeRepo.findByDepartment(manager.getDepartment());
+	    List<Long> empIds = team.stream().map(Employee::getEmpId).collect(Collectors.toList());
+
+	    return leaveRequestRepo.findByEmployeeEmpIdIn(empIds);  
+	}
+
+	
+	// 7. Get Team Leave Summary
+	public Map<String, Object> getTeamLeaveSummary(Long managerId) {
+	    Manager manager = managerRepo.findById(managerId)
+	            .orElseThrow(() -> new RuntimeException("Manager not found"));
+
+	    List<Employee> team = employeeRepo.findByDepartment(manager.getDepartment());
+	    List<Long> empIds = team.stream().map(Employee::getEmpId).collect(Collectors.toList());
+	    List<LeaveRequest> allLeaves = leaveRequestRepo.findByEmployeeEmpIdIn(empIds);
+
+	    long totalApproved = allLeaves.stream()
+	            .filter(lr -> lr.getStatus() == LeaveStatus.APPROVED)
+	            .count();
+
+	    long totalRejected = allLeaves.stream()
+	            .filter(lr -> lr.getStatus() == LeaveStatus.REJECTED)
+	            .count();
+
+	    Map<String, Object> summary = new HashMap<>();
+	    summary.put("totalEmployees", team.size());
+	    summary.put("approvedLeaves", totalApproved);
+	    summary.put("rejectedLeaves", totalRejected);
+	    summary.put("avgLeavesPerEmployee", (double) allLeaves.size() / team.size());
+	    return summary;
+	}
+
 }
- 
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
